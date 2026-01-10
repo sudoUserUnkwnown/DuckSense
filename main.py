@@ -29,7 +29,7 @@ DUCK_COLORS = {
 }
 
 class Player:
-    def __init__(self, name, color_name, device):
+    def __init__(self, name, color_name, device, MSG=None):
         self.name = name
         self.color_name = color_name
         self.color_range = DUCK_COLORS.get(color_name)
@@ -38,6 +38,8 @@ class Player:
         self.vib_task = None
         # queue of active vibration events: {'start': float, 'duration': float, 'amplitude': float}
         self.vibration_events = []
+        # localized messages dict passed from DuckHaptics
+        self.MSG = MSG if MSG is not None else {}
 
     async def update_vibration(self, change):
         # change may be positive (lost) or negative (won)
@@ -278,7 +280,7 @@ class DuckHaptics:
                 print(self.MSG.get('invalid_selection_assign_first', "Invalid selection, assigning the first one."))
                 device = available_devices[0]
 
-            player = Player(f"P{i+1}", color, device)
+            player = Player(f"P{i+1}", color, device, self.MSG)
             self.players.append(player)
             print(self.MSG.get('player_ready', "Player {i} ready: {color} -> {dev}").format(i=i+1, color=color, dev=device.name))
 
