@@ -2,7 +2,7 @@
 
 Bring tactile feedback to Duck Game using Intiface-compatible devices.
 
-A small, configurable helper that watches your screen for in-game +1 events and sends smooth, time-limited vibration events to connected devices. Designed for players, streamers, and modders who want matches to feel more immersive.
+Finally bringing this functionality to Duck Game, this small, configurable helper watches your screen for in-game +1 events and sends smooth vibration triggers. It’s a simple tool designed for players and streamers who want matches to feel more immersive.
 
 ---
 
