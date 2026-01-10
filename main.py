@@ -44,21 +44,21 @@ class Player:
         new_intensity = self.intensity + change
         # Clamp between 0.0 and 1.0
         self.intensity = max(0.0, min(1.0, new_intensity))
-        print(f"[{self.name}] Intensity: {int(self.intensity * 100)}%")
+        print(self.MSG.get('intensity_status', "[{name}] Intensity: {pct}%").format(name=self.name, pct=int(self.intensity * 100)))
         return self.intensity
 
     def add_vibration_event(self, amplitude, duration):
         # amplitude is 0..1, duration in seconds
         ev = {'start': time.time(), 'duration': float(duration), 'amplitude': float(amplitude)}
         self.vibration_events.append(ev)
-        print(f"[{self.name}] Vibration event started: amplitude={amplitude:.2f}, duration={duration:.1f}s")
+        print(self.MSG.get('vibration_event_started', "[{name}] Vibration event started: amplitude={amplitude:.2f}, duration={duration:.1f}s").format(name=self.name, amplitude=amplitude, duration=duration))
 
     async def send_vibrate_level(self, level):
         if self.device:
             try:
                 await self.device.send_vibrate_cmd(level)
             except Exception as e:
-                print(f"Error vibrating device {self.name}: {e}")
+                print(self.MSG.get('error_vibrating_device', "Error vibrating device {name}: {err}").format(name=self.name, err=e))
 
     async def stop_device(self):
         if self.device:
@@ -78,8 +78,8 @@ class DuckHaptics:
         self.template = cv2.imread(path_imagen, 0)
 
         if self.template is None:
-            # Tip: Imprime la ruta para ver dónde está buscando si falla
-            print(f"Error: No se pudo cargar {path_imagen}") 
+                # Tip: print the path when it fails to help debugging
+            print(self.MSG.get('no_template', f"Error: Could not load {path_imagen}").format(path=path_imagen))
             self.w, self.h = 0, 0
         else:
             self.w, self.h = self.template.shape[::-1]
@@ -129,8 +129,7 @@ class DuckHaptics:
             await self.client.connect(connector)
             print(self.MSG.get('connected', "Connected to Intiface!"))
         except Exception as e:
-            print(f"Error connecting to Intiface: {e}")
-            return False
+                print(self.MSG.get('error_connecting', "Error connecting to Intiface: {err}").format(err=e))
         
         print(self.MSG.get('scanning', "Scanning for devices..."))
         await self.client.start_scanning()
@@ -144,6 +143,7 @@ class DuckHaptics:
 
     def set_language(self):
         # Choose language using indices so text differences can't break selection
+        # Show bilingual language prompt (before MSG is selected)
         print("Select language / Selecciona idioma:")
         print("0: English")
         print("1: Español")
@@ -170,8 +170,21 @@ class DuckHaptics:
                 'press_q_exit': "Press 'q' in the console to exit.",
                 'detected_plus_one': "Detected +1 of color {color}!",
                 'shutting_down': "Shutting down devices...",
-                'no_template': "Error: Could not load template",
-                'intermission_detected': "Intermission detected — resetting vibrations."
+                'no_template': "Error: Could not load {path}",
+                'intermission_detected': "Intermission detected — resetting vibrations.",
+                'available_monitors': "Available monitors:",
+                'select_monitor_idx': "Select monitor index (default 1): ",
+                'invalid_monitor': "Invalid monitor selection, using main monitor (1).",
+                'set_intensity_multiplier': "Set global intensity multiplier (0.0 to 1.0, default 1.0): ",
+                'invalid_multiplier': "Invalid multiplier, using 1.0",
+                'configuring_player': "--- Configuring Player {n} ---",
+                'player_ready': "Player {i} ready: {color} -> {dev}",
+                'error_connecting': "Error connecting to Intiface: {err}",
+                'intensity_status': "[{name}] Intensity: {pct}%",
+                'vibration_event_started': "[{name}] Vibration event started: amplitude={amplitude:.2f}, duration={duration:.1f}s",
+                'error_vibrating_device': "Error vibrating device {name}: {err}",
+                'error_sending': "Error sending vibrate level to {name}: {err}",
+                'program_finished': "Program finished."
             },
             'es': {
                 'connecting': "Conectando a Intiface Central...",
@@ -189,31 +202,44 @@ class DuckHaptics:
                 'press_q_exit': "Presiona 'q' en la consola para salir.",
                 'detected_plus_one': "¡Detectado +1 de color {color}!",
                 'shutting_down': "Apagando juguetes...",
-                'no_template': "Error: No se pudo cargar el template",
-                'intermission_detected': "Intermission detectado — reiniciando vibraciones."
+                'no_template': "Error: No se pudo cargar {path}",
+                'intermission_detected': "Intermission detectado — reiniciando vibraciones.",
+                'available_monitors': "Monitores disponibles:",
+                'select_monitor_idx': "Selecciona el índice del monitor (por defecto 1): ",
+                'invalid_monitor': "Selección inválida de monitor, usando el monitor principal (1).",
+                'set_intensity_multiplier': "Ajusta el multiplicador global de intensidad (0.0 a 1.0, por defecto 1.0): ",
+                'invalid_multiplier': "Multiplicador inválido, usando 1.0",
+                'configuring_player': "--- Configurando Jugador {n} ---",
+                'player_ready': "Jugador {i} listo: {color} -> {dev}",
+                'error_connecting': "Error conectando a Intiface: {err}",
+                'intensity_status': "[{name}] Intensidad: {pct}%",
+                'vibration_event_started': "[{name}] Evento iniciado: amplitud={amplitude:.2f}, duración={duration:.1f}s",
+                'error_vibrating_device': "Error vibrando el dispositivo {name}: {err}",
+                'error_sending': "Error enviando nivel de vibración a {name}: {err}",
+                'program_finished': "Programa finalizado."
             }
         }
         self.MSG = self.MSG[self.lang]
 
     def configure_settings(self):
         # Monitor selection (index-based to avoid language issues)
-        print("Available monitors:")
+        print(self.MSG.get('available_monitors', "Available monitors:"))
         for idx, mon in enumerate(self.sct.monitors):
             print(f"{idx}: {mon}")
         try:
-            mon_idx = int(input("Select monitor index (default 1): "))
+            mon_idx = int(input(self.MSG.get('select_monitor_idx', "Select monitor index (default 1): ")))
             self.monitor = self.sct.monitors[mon_idx]
         except:
-            print("Invalid monitor selection, using main monitor (1).")
+            print(self.MSG.get('invalid_monitor', "Invalid monitor selection, using main monitor (1)."))
             self.monitor = self.sct.monitors[1]
 
         # Intensity multiplier
         try:
-            v = float(input("Set global intensity multiplier (0.0 to 1.0, default 1.0): "))
+            v = float(input(self.MSG.get('set_intensity_multiplier', "Set global intensity multiplier (0.0 to 1.0, default 1.0): ")))
             if 0.0 <= v <= 1.0:
                 self.intensity_multiplier = v
             else:
-                print("Invalid multiplier, using 1.0")
+                print(self.MSG.get('invalid_multiplier', "Invalid multiplier, using 1.0"))
         except:
             self.intensity_multiplier = 1.0
 
@@ -227,7 +253,7 @@ class DuckHaptics:
         colors = list(DUCK_COLORS.keys())
 
         for i in range(num_players):
-            print(f"\n--- Configuring Player {i+1} ---")
+            print(self.MSG.get('configuring_player', "--- Configuring Player {n} ---").format(n=i+1))
             print(self.MSG.get('colors_available', "Available colors:"))
             for idx, cname in enumerate(colors):
                 print(f"{idx}: {cname}")
@@ -254,7 +280,7 @@ class DuckHaptics:
 
             player = Player(f"P{i+1}", color, device)
             self.players.append(player)
-            print(f"Player {i+1} ready: {color} -> {device.name}")
+            print(self.MSG.get('player_ready', "Player {i} ready: {color} -> {dev}").format(i=i+1, color=color, dev=device.name))
 
         # Start the per-player vibration tasks
         self.start_vibration_tasks()
@@ -337,7 +363,7 @@ class DuckHaptics:
                 try:
                     await player.device.send_vibrate_cmd(level)
                 except Exception as e:
-                    print(f"Error sending vibrate level to {player.name}: {e}")
+                    print(self.MSG.get('error_sending', "Error sending vibrate level to {name}: {err}").format(name=player.name, err=e))
                 last_sent_zero = False
             else:
                 if player.device and not last_sent_zero:
@@ -426,4 +452,4 @@ if __name__ == "__main__":
         loop.run_until_complete(game.setup_players())
         loop.run_until_complete(game.game_loop())
 
-    print("Program finished.")
+    print(game.MSG.get('program_finished', "Program finished."))
