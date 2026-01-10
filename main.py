@@ -36,6 +36,8 @@ class Player:
         self.device = device
         self.intensity = 0.0  # 0.0 to 1.0
         self.vib_task = None
+        # queue of active vibration events: {'start': float, 'duration': float, 'amplitude': float}
+        self.vibration_events = []
 
     async def update_vibration(self, change):
         # change may be positive (lost) or negative (won)
@@ -43,6 +45,13 @@ class Player:
         # Clamp between 0.0 and 1.0
         self.intensity = max(0.0, min(1.0, new_intensity))
         print(f"[{self.name}] Intensity: {int(self.intensity * 100)}%")
+        return self.intensity
+
+    def add_vibration_event(self, amplitude, duration):
+        # amplitude is 0..1, duration in seconds
+        ev = {'start': time.time(), 'duration': float(duration), 'amplitude': float(amplitude)}
+        self.vibration_events.append(ev)
+        print(f"[{self.name}] Vibration event started: amplitude={amplitude:.2f}, duration={duration:.1f}s")
 
     async def send_vibrate_level(self, level):
         if self.device:
@@ -98,6 +107,20 @@ class DuckHaptics:
         self.lang = 'en'
         self.MSG = {}
         self.vibration_tasks = []
+        # Duration curve parameter: controls how duration shrinks with intensity
+        self.duration_curve_exponent = 0.7
+
+    def duration_for_intensity(self, intensity):
+        """Map intensity (0..1) to duration in seconds.
+        First (low intensity) -> ~20s, last (high intensity) -> ~10s.
+        Use a mild non-linear curve for a perceptually smooth change.
+        """
+        intensity = max(0.0, min(1.0, float(intensity)))
+        min_d = 10.0
+        max_d = 20.0
+        # Non-linear mapping using exponent; intensity 0 => max_d, intensity 1 => min_d
+        dur = min_d + (1.0 - intensity) ** self.duration_curve_exponent * (max_d - min_d)
+        return dur
 
     async def connect_intiface(self):
         print(self.MSG.get('connecting', "Connecting to Intiface Central..."))
@@ -290,11 +313,27 @@ class DuckHaptics:
         start_time = time.time()
         last_sent_zero = False
         while self.running:
-            intensity = player.intensity * self.intensity_multiplier
-            if intensity > 0 and player.device:
-                t = time.time() - start_time
+            now = time.time()
+            total_amp = 0.0
+            alive_events = []
+            # sum contributions from active events using a smooth cosine envelope
+            for ev in player.vibration_events:
+                t = now - ev['start']
+                if 0.0 <= t <= ev['duration']:
+                    # cosine fade from 1 -> 0 over the duration (smooth)
+                    envelope = 0.5 * (1.0 + math.cos(math.pi * t / ev['duration']))
+                    total_amp += ev['amplitude'] * envelope
+                    alive_events.append(ev)
+            # purge expired events
+            player.vibration_events = alive_events
+
+            # clamp combined amplitude and apply global multiplier
+            total_amp = min(total_amp, 1.0) * self.intensity_multiplier
+
+            if total_amp > 0 and player.device:
+                t = now - start_time
                 sine = (math.sin(2 * math.pi * freq * t) + 1.0) / 2.0  # 0..1
-                level = float(sine * intensity)
+                level = float(sine * total_amp)
                 try:
                     await player.device.send_vibrate_cmd(level)
                 except Exception as e:
@@ -331,6 +370,7 @@ class DuckHaptics:
                 print(self.MSG.get('intermission_detected', "Intermission detected — resetting vibrations."))
                 for p in self.players:
                     p.intensity = 0.0
+                    p.vibration_events = []
                     try:
                         await p.stop_device()
                     except:
@@ -350,8 +390,11 @@ class DuckHaptics:
                             # WON: reduce intensity
                             await player.update_vibration(-0.2)
                         else:
-                            # LOST: increase intensity
-                            await player.update_vibration(0.1)
+                            # LOST: increase intensity and create timed vibration event
+                            new_int = await player.update_vibration(0.1)
+                            if new_int > 0.0:
+                                dur = self.duration_for_intensity(new_int)
+                                player.add_vibration_event(new_int, dur)
                     
                     cooldown = True
                     cooldown_timer = time.time()
