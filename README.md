@@ -1,4 +1,4 @@
-# Duck Game Haptics 🦆🔊
+# DuckSense
 
 Bring tactile feedback to Duck Game using Intiface-compatible devices.
 
