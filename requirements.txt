@@ -1,0 +1,5 @@
+buttplug
+opencv-python
+numpy
+mss
+keyboard
